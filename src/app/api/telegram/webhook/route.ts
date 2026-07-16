@@ -56,10 +56,17 @@ export async function POST(req: NextRequest) {
       });
     }
   } catch (err) {
+    let code = "UNKNOWN";
+    if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      code = err.code;
+    }
     console.error("[webhook] error", {
       updateId: update.update_id,
-      error: (err as Error).message,
+      errorName: (err as Error).name,
+      prismaCode: code,
+      errorMessage: (err as Error).message,
     });
+    return NextResponse.json({ ok: false, error: "internal error" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

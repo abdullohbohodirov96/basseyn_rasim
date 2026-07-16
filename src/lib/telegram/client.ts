@@ -124,3 +124,7 @@ export function deleteWebhook() {
 export function getWebhookInfo() {
   return callTelegram("getWebhookInfo", {});
 }
+
+export function getMe(): Promise<any> {
+  return callTelegram("getMe", {});
+}

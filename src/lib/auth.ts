@@ -11,10 +11,18 @@ export const UNAUTHORIZED_MESSAGE =
  */
 export async function getOrBootstrapUser(telegramId: string, username?: string): Promise<User | null> {
   const existing = await prisma.user.findUnique({ where: { telegramId } });
-  if (existing) return existing;
-
   const env = getEnv();
+
   if (telegramId === env.INITIAL_ADMIN_TELEGRAM_ID.trim()) {
+    if (existing) {
+      if (existing.role !== Role.ADMIN || !existing.isActive) {
+        return prisma.user.update({
+          where: { id: existing.id },
+          data: { role: Role.ADMIN, isActive: true },
+        });
+      }
+      return existing;
+    }
     return prisma.user.create({
       data: {
         telegramId,
@@ -25,6 +33,8 @@ export async function getOrBootstrapUser(telegramId: string, username?: string):
       },
     });
   }
+  
+  if (existing) return existing;
   return null;
 }
 

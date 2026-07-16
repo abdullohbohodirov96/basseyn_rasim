@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getEnv } from "@/lib/env";
-import { getWebhookInfo } from "@/lib/telegram/client";
+import { getWebhookInfo, getMe } from "@/lib/telegram/client";
 import { prisma } from "@/lib/prisma";
 import { isR2Configured, checkR2Connection } from "@/lib/r2";
 
@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
     telegramToken: "valid",
     webhookUrl: "correct",
     webhookLastError: null,
+    pendingUpdateCount: 0,
     database: "connected",
     requiredTables: "available",
     initialAdminConfigured: false,
@@ -32,12 +33,21 @@ export async function GET(req: NextRequest) {
   };
 
   try {
+    const me = await getMe();
+    if (!me || !me.id) {
+      result.telegramToken = "invalid";
+    }
+  } catch {
+    result.telegramToken = "invalid";
+  }
+
+  try {
     const info: any = await getWebhookInfo();
     const expectedUrl = `${env.APP_URL.replace(/\/$/, "")}/api/telegram/webhook`;
     if (info.url !== expectedUrl) result.webhookUrl = "incorrect";
     if (info.last_error_message) result.webhookLastError = info.last_error_message;
+    if (info.pending_update_count !== undefined) result.pendingUpdateCount = info.pending_update_count;
   } catch {
-    result.telegramToken = "invalid";
     result.webhookUrl = "unknown";
   }
 
@@ -48,7 +58,12 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    await prisma.processedTelegramUpdate.findFirst();
+    await prisma.$transaction([
+      prisma.user.findFirst({ select: { id: true } }),
+      prisma.constructionObject.findFirst({ select: { id: true } }),
+      prisma.botSession.findFirst({ select: { telegramId: true } }),
+      prisma.processedTelegramUpdate.findFirst({ select: { id: true } }),
+    ]);
   } catch {
     result.requiredTables = "missing";
   }

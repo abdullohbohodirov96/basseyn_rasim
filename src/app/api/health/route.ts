@@ -11,10 +11,20 @@ export async function GET() {
   const startedAt = Date.now();
 
   let dbStatus: "ok" | "error" = "ok";
+  let tablesStatus: "ok" | "error" = "ok";
   try {
     await prisma.$queryRaw`SELECT 1`;
+    
+    // Specifically check that the required application tables exist
+    await prisma.$transaction([
+      prisma.user.findFirst({ select: { id: true } }),
+      prisma.constructionObject.findFirst({ select: { id: true } }),
+      prisma.botSession.findFirst({ select: { telegramId: true } }),
+      prisma.processedTelegramUpdate.findFirst({ select: { id: true } }),
+    ]);
   } catch {
     dbStatus = "error";
+    tablesStatus = "error";
   }
 
   let storageStatus: "ok" | "not_configured" | "error" = "not_configured";
@@ -29,6 +39,7 @@ export async function GET() {
       status: overallOk ? "ok" : "degraded",
       version: APP_VERSION,
       database: dbStatus,
+      tables: tablesStatus,
       storage: storageStatus,
       timeZone: "Asia/Tashkent",
       responseTimeMs: Date.now() - startedAt,
