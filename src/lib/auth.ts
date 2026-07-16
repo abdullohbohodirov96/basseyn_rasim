@@ -9,14 +9,19 @@ export const UNAUTHORIZED_MESSAGE =
  * Finds the acting user by their Telegram id, auto-provisioning the
  * INITIAL_ADMIN_TELEGRAM_ID as an ADMIN on first contact.
  */
-export async function getOrBootstrapUser(telegramId: string, username?: string): Promise<User | null> {
+export async function getOrBootstrapUser(telegramId: string, fullName: string, username?: string): Promise<User | null> {
   const existing = await prisma.user.findUnique({ where: { telegramId } });
   
   if (existing) {
-    if (existing.role !== Role.ADMIN || !existing.isActive) {
+    if (
+      existing.role !== Role.ADMIN || 
+      !existing.isActive || 
+      existing.fullName !== fullName || 
+      existing.username !== username
+    ) {
       return prisma.user.update({
         where: { id: existing.id },
-        data: { role: Role.ADMIN, isActive: true },
+        data: { role: Role.ADMIN, isActive: true, fullName, username },
       });
     }
     return existing;
@@ -26,7 +31,7 @@ export async function getOrBootstrapUser(telegramId: string, username?: string):
     data: {
       telegramId,
       username,
-      fullName: username || "Foydalanuvchi",
+      fullName,
       role: Role.ADMIN,
       isActive: true,
     },

@@ -54,7 +54,8 @@ export async function handleMessage(message: TelegramMessage) {
   const telegramId = String(from.id);
   const chatId = message.chat.id;
 
-  const user = await getOrBootstrapUser(telegramId, from.username);
+  const telegramFullName = [from.first_name, from.last_name].filter(Boolean).join(" ") || "Foydalanuvchi";
+  const user = await getOrBootstrapUser(telegramId, telegramFullName, from.username);
   if (!isActiveUser(user)) {
     await sendMessage(chatId, user === null ? TXT.unauthorized : TXT.inactiveUser);
     return;
@@ -171,7 +172,7 @@ export async function handleCallbackQuery(cq: TelegramCallbackQuery) {
   const chatId = cq.message?.chat.id;
   if (!chatId || !cq.data) return;
 
-  const user = await getOrBootstrapUser(telegramId, from.username);
+  const user = await getOrBootstrapUser(telegramId, [from.first_name, from.last_name].filter(Boolean).join(" ") || "Foydalanuvchi", from.username);
   if (!isActiveUser(user)) {
     await answerCallbackQuery(cq.id, TXT.unauthorized);
     return;

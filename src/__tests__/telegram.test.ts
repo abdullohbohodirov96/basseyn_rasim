@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client';
 vi.mock('../lib/prisma', () => ({
   prisma: {
     processedTelegramUpdate: { create: vi.fn(), findFirst: vi.fn() },
-    user: { findUnique: vi.fn(), create: vi.fn() },
+    user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     photo: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), findMany: vi.fn(), count: vi.fn(), updateMany: vi.fn() },
     constructionObject: { findUnique: vi.fn() },
     objectMember: { findUnique: vi.fn() },
@@ -108,8 +108,8 @@ describe('Telegram Bot Runtime Tests', () => {
   describe('Auth & Initial Bootstrap', () => {
     it('initial admin bootstrap works', async () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(null);
-      vi.mocked(prisma.user.create).mockResolvedValueOnce({ id: '1', telegramId: '123456', role: 'ADMIN', isActive: true } as any);
-      const user = await getOrBootstrapUser('123456');
+      vi.mocked(prisma.user.create).mockResolvedValueOnce({ id: '1', telegramId: '123456', role: 'ADMIN', isActive: true, fullName: 'Test User' } as any);
+      const user = await getOrBootstrapUser('123456', 'Test User');
       expect(prisma.user.create).toHaveBeenCalled();
     });
 
@@ -118,8 +118,8 @@ describe('Telegram Bot Runtime Tests', () => {
 
   describe('/start response', () => {
     it('clears session and sends welcome', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({ id: '1', role: 'ADMIN', isActive: true, fullName: 'Admin' } as any);
-      await handleMessage({ message_id: 1, date: 1, chat: { id: 1, type: 'private' }, from: { id: 123456, is_bot: false, first_name: 'test' }, text: '/start' } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({ id: '1', role: 'ADMIN', isActive: true, fullName: 'Admin', username: 'admin' } as any);
+      await handleMessage({ message_id: 1, date: 1, chat: { id: 1, type: 'private' }, from: { id: 123456, is_bot: false, first_name: 'Admin', username: 'admin' }, text: '/start' } as any);
       expect(sendMessage).toHaveBeenCalledWith(1, expect.stringContaining('Assalomu'), expect.any(Object));
     });
   });
