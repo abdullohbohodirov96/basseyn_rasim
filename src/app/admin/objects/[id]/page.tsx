@@ -117,7 +117,7 @@ export default async function AdminObjectDetailPage({
             <p className="muted">
               {formatDateTashkent(p.uploadedAt)} {formatTimeTashkent(p.uploadedAt)} · {p.uploadedBy.fullName}
             </p>
-            <form action={updatePhotoCommentAction.bind(null, p.id, "", object.id)}>
+            <form action={updatePhotoCommentAction.bind(null, p.id, object.id)}>
               <textarea name="comment" defaultValue={p.comment ?? ""} rows={2} />
               <button className="btn" type="submit">
                 Saqlash
