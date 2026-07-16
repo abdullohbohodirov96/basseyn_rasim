@@ -5,7 +5,8 @@ import { uploadObject, getSignedDownloadUrl } from "../../r2";
 import { generatePreview, sha256Hex, isSupportedImageMime, guessMimeFromFilename, readDimensions } from "../../image";
 import { buildOriginalKey, buildPreviewKey, formatDateTashkent, formatTimeTashkent, escapeHtml } from "../../utils";
 import { MAX_UPLOAD_SIZE_BYTES } from "../../env";
-import { setSession, getSession, clearSession, SessionState } from "../../session";
+import { getSession, setSession, clearSession, SessionState } from "../../session";
+import { getEnv } from "../../env";
 import { sendMessage, sendPhoto, getFile, downloadTelegramFile } from "../client";
 import { TXT, BTN } from "../text";
 import { objectMenuKeyboard } from "../keyboards";
@@ -257,10 +258,80 @@ export async function applyBulkComment(chatId: number, telegramId: string, user:
 }
 
 export async function finishUploadSession(chatId: number, telegramId: string, user: User, objectId: string) {
+  const session = await getSession(telegramId);
+  const uploadedIds = (session.temporaryData.uploadedPhotoIds as string[]) ?? [];
   await clearSession(telegramId);
+  
   const object = await prisma.constructionObject.findUnique({ where: { id: objectId } });
   await sendMessage(chatId, "✅ Yuklash yakunlandi.", { replyKeyboard: objectMenuKeyboard(user.role) });
-  void object;
+  
+  if (uploadedIds.length > 0) {
+    try {
+      await reportPhotosToGroup(uploadedIds, object!.name);
+    } catch (err) {
+      console.error("Failed to report photos to group", err);
+    }
+  }
+}
+
+async function reportPhotosToGroup(photoIds: string[], objectName: string) {
+  const env = getEnv();
+  if (!env.TELEGRAM_REPORT_GROUP_ID) return;
+  const groupId = env.TELEGRAM_REPORT_GROUP_ID;
+
+  const photos = await prisma.photo.findMany({
+    where: { id: { in: photoIds }, deletedAt: null },
+    orderBy: { uploadedAt: "asc" },
+    include: { uploadedBy: true },
+  });
+
+  if (photos.length === 0) return;
+
+  // Group photos by media group id or single
+  const grouped: (typeof photos[0])[][] = [];
+  let currentGroup: (typeof photos[0])[] = [];
+  let currentGroupId: string | null = null;
+
+  for (const p of photos) {
+    if (p.telegramMediaGroupId) {
+      if (currentGroupId === p.telegramMediaGroupId) {
+        currentGroup.push(p);
+      } else {
+        if (currentGroup.length > 0) grouped.push(currentGroup);
+        currentGroup = [p];
+        currentGroupId = p.telegramMediaGroupId;
+      }
+    } else {
+      if (currentGroup.length > 0) grouped.push(currentGroup);
+      grouped.push([p]);
+      currentGroup = [];
+      currentGroupId = null;
+    }
+  }
+  if (currentGroup.length > 0) grouped.push(currentGroup);
+
+  for (let i = 0; i < grouped.length; i++) {
+    const chunk = grouped[i]!;
+    if (chunk.length === 1) {
+      const p = chunk[0]!;
+      const previewUrl = await getSignedDownloadUrl(p.previewStorageKey);
+      const caption = `🏢 Obyekt: <b>${escapeHtml(objectName)}</b>\n📅 ${formatDateTashkent(p.uploadedAt)}\n🕐 ${formatTimeTashkent(p.uploadedAt)}\n👤 ${escapeHtml(p.uploadedBy.fullName)}\n📝 ${p.comment ? escapeHtml(p.comment) : TXT.noComment}`;
+      await sendPhoto(groupId, previewUrl, caption);
+    } else {
+      const p = chunk[0]!;
+      const caption = `🏢 Obyekt: <b>${escapeHtml(objectName)}</b>\n📅 ${formatDateTashkent(p.uploadedAt)}\n🕐 ${formatTimeTashkent(p.uploadedAt)}\n👤 ${escapeHtml(p.uploadedBy.fullName)}\n📝 ${p.comment ? escapeHtml(p.comment) : TXT.noComment}`;
+      const mediaItems = await Promise.all(chunk.map(async (cp, idx) => {
+        const previewUrl = await getSignedDownloadUrl(cp.previewStorageKey);
+        return {
+          type: "photo" as const,
+          media: previewUrl,
+          caption: idx === 0 ? caption : undefined,
+          parse_mode: "HTML" as const
+        };
+      }));
+      await sendMediaGroup(groupId, mediaItems);
+    }
+  }
 }
 
 // ---------------- Viewing ----------------

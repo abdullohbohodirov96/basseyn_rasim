@@ -8,6 +8,7 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().optional(),
+  TELEGRAM_REPORT_GROUP_ID: z.string().optional(),
 
   R2_ACCOUNT_ID: z.string().min(1),
   R2_ACCESS_KEY_ID: z.string().min(1),
