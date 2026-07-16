@@ -3,27 +3,19 @@ import { BTN } from "./text";
 import type { ReplyKeyboardButton, InlineKeyboardButton } from "./client";
 
 export function mainMenuKeyboard(role: Role): ReplyKeyboardButton[][] {
-  const rows: ReplyKeyboardButton[][] = [
+  return [
     [{ text: BTN.objects }, { text: BTN.addObject }],
-    [{ text: BTN.archive }],
+    [{ text: BTN.archive }]
   ];
-  if (role === Role.ADMIN) {
-    rows[1]!.push({ text: BTN.users });
-  }
-  rows.push([{ text: BTN.settings }]);
-  return rows;
 }
 
 export function objectMenuKeyboard(role: Role): ReplyKeyboardButton[][] {
   const rows: ReplyKeyboardButton[][] = [
     [{ text: BTN.addPhoto }, { text: BTN.viewPhotos }],
-    [{ text: BTN.viewStaff }, { text: BTN.rename }],
-    [{ text: BTN.archiveObject }],
+    [{ text: BTN.rename }, { text: BTN.archiveObject }],
+    [{ text: BTN.permanentlyDelete }],
+    [{ text: BTN.back }],
   ];
-  if (role === Role.ADMIN) {
-    rows.push([{ text: BTN.permanentlyDelete }]);
-  }
-  rows.push([{ text: BTN.back }]);
   return rows;
 }
 

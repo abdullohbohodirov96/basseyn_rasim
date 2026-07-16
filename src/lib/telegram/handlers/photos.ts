@@ -306,24 +306,45 @@ export async function viewPhotos(chatId: number, user: User, objectId: string, i
     include: { uploadedBy: true },
   });
 
-  const CHUNK_SIZE = 10;
-  
-  for (let i = 0; i < photos.length; i += CHUNK_SIZE) {
-    const chunk = photos.slice(i, i + CHUNK_SIZE);
-    
+  // Group photos by media group id or keep them single
+  const grouped: (typeof photos[0])[][] = [];
+  let currentGroup: (typeof photos[0])[] = [];
+  let currentGroupId: string | null = null;
+
+  for (const p of photos) {
+    if (p.telegramMediaGroupId) {
+      if (currentGroupId === p.telegramMediaGroupId) {
+        currentGroup.push(p);
+      } else {
+        if (currentGroup.length > 0) grouped.push(currentGroup);
+        currentGroup = [p];
+        currentGroupId = p.telegramMediaGroupId;
+      }
+    } else {
+      if (currentGroup.length > 0) grouped.push(currentGroup);
+      grouped.push([p]);
+      currentGroup = [];
+      currentGroupId = null;
+    }
+  }
+  if (currentGroup.length > 0) grouped.push(currentGroup);
+
+  for (let i = 0; i < grouped.length; i++) {
+    const chunk = grouped[i]!;
     if (chunk.length === 1) {
       const p = chunk[0]!;
       const previewUrl = await getSignedDownloadUrl(p.previewStorageKey);
-      const caption = `📷 ${i + 1} / ${total}\n📅 ${formatDateTashkent(p.uploadedAt)}\n🕐 ${formatTimeTashkent(p.uploadedAt)}\n👤 ${escapeHtml(p.uploadedBy.fullName)}\n📝 ${p.comment ? escapeHtml(p.comment) : TXT.noComment}`;
+      const caption = `📅 ${formatDateTashkent(p.uploadedAt)}\n🕐 ${formatTimeTashkent(p.uploadedAt)}\n👤 ${escapeHtml(p.uploadedBy.fullName)}\n📝 ${p.comment ? escapeHtml(p.comment) : TXT.noComment}`;
       await sendPhoto(chatId, previewUrl, caption);
     } else {
-      const mediaItems = await Promise.all(chunk.map(async (p, idx) => {
-        const previewUrl = await getSignedDownloadUrl(p.previewStorageKey);
-        const caption = `📷 ${i + idx + 1} / ${total}\n📅 ${formatDateTashkent(p.uploadedAt)}\n🕐 ${formatTimeTashkent(p.uploadedAt)}\n👤 ${escapeHtml(p.uploadedBy.fullName)}\n📝 ${p.comment ? escapeHtml(p.comment) : TXT.noComment}`;
+      const p = chunk[0]!;
+      const caption = `📅 ${formatDateTashkent(p.uploadedAt)}\n🕐 ${formatTimeTashkent(p.uploadedAt)}\n👤 ${escapeHtml(p.uploadedBy.fullName)}\n📝 ${p.comment ? escapeHtml(p.comment) : TXT.noComment}`;
+      const mediaItems = await Promise.all(chunk.map(async (cp, idx) => {
+        const previewUrl = await getSignedDownloadUrl(cp.previewStorageKey);
         return {
           type: "photo" as const,
           media: previewUrl,
-          caption,
+          caption: idx === 0 ? caption : undefined,
           parse_mode: "HTML" as const
         };
       }));

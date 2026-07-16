@@ -98,27 +98,6 @@ export async function handleMessage(message: TelegramMessage) {
     await listObjects(chatId, user, 0, "ARCHIVED");
     return;
   }
-  if (text === BTN.users) {
-    await clearSession(telegramId);
-    await showUsersMenu(chatId, user);
-    return;
-  }
-  if (text === BTN.addUser) {
-    await startAddUser(chatId, telegramId, user);
-    return;
-  }
-  if (text === BTN.usersList) {
-    await listUsers(chatId, user, 0);
-    return;
-  }
-  if (text === BTN.assignUserToObject) {
-    await startAssignUserToObject(chatId, telegramId, user);
-    return;
-  }
-  if (text === BTN.removeUser) {
-    await startRemoveUserFromObject(chatId, telegramId, user);
-    return;
-  }
   if (text === BTN.settings) {
     await showSettings(chatId, user);
     return;
@@ -137,10 +116,6 @@ export async function handleMessage(message: TelegramMessage) {
     }
     if (text === BTN.rename) {
       await startRenameObject(chatId, telegramId, user, objectId);
-      return;
-    }
-    if (text === BTN.viewStaff) {
-      await viewStaff(chatId, user, objectId);
       return;
     }
     if (text === BTN.archiveObject) {
@@ -173,12 +148,6 @@ export async function handleMessage(message: TelegramMessage) {
         if (session.selectedObjectId) {
           await applyBulkComment(chatId, telegramId, user, session.selectedObjectId, text);
         }
-        return;
-      case SessionState.AWAITING_USER_TELEGRAM_ID:
-        await handleUserIdInput(chatId, telegramId, user, message);
-        return;
-      case SessionState.AWAITING_USER_FULL_NAME:
-        await handleUserFullNameInput(chatId, telegramId, user, text);
         return;
       default:
         break;
@@ -254,21 +223,7 @@ export async function handleCallbackQuery(cq: TelegramCallbackQuery) {
   }
 
   if (namespace === "user") {
-    if (action === "page") {
-      await listUsers(chatId, user, Number(rest[0] ?? 0));
-    } else if (action === "role") {
-      await setUserRole(chatId, user, rest[0]!, rest[1] as Role);
-    } else if (action === "active") {
-      await setUserActive(chatId, user, rest[0]!, rest[1] === "true");
-    } else if (action === "pickassign") {
-      await handlePickAssignUser(chatId, telegramId, user, rest[0]!);
-    } else if (action === "doassign") {
-      await assignUserToObject(chatId, user, rest[0]!, rest[1]!);
-    } else if (action === "pickremove") {
-      await handlePickRemoveUser(chatId, telegramId, user, rest[0]!);
-    } else if (action === "doremove") {
-      await removeUserFromObject(chatId, user, rest[0]!, rest[1]!);
-    }
+    // User management removed for simplicity
     return;
   }
 }
