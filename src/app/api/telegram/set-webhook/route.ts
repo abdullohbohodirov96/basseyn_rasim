@@ -30,10 +30,24 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const env = getEnv();
+  const searchParams = req.nextUrl.searchParams;
+  const secretParam = searchParams.get("secret");
   const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${env.CRON_SECRET}`) {
+  
+  if (secretParam !== env.CRON_SECRET && auth !== `Bearer ${env.CRON_SECRET}`) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
+
+  const action = searchParams.get("action");
+  if (action === "set") {
+    if (!env.APP_URL) {
+      return NextResponse.json({ ok: false, error: "APP_URL is not set" }, { status: 400 });
+    }
+    const url = `${env.APP_URL.replace(/\/$/, "")}/api/telegram/webhook`;
+    const result = await setWebhook(url, env.TELEGRAM_WEBHOOK_SECRET);
+    return NextResponse.json({ ok: true, url, result });
+  }
+
   const info = await getWebhookInfo();
   return NextResponse.json({ ok: true, info });
 }
