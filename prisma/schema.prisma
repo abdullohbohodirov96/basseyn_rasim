@@ -1,0 +1,153 @@
+// Prisma schema for the Pool Construction Telegram Bot
+// Provider: Neon PostgreSQL, deployed on Vercel serverless
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  WORKER
+  VIEWER
+}
+
+enum ObjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ObjectPermission {
+  VIEW
+  UPLOAD
+  MANAGE
+}
+
+model User {
+  id         String   @id @default(cuid())
+  telegramId String   @unique
+  username   String?
+  fullName   String
+  role       Role     @default(VIEWER)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  createdObjects  ConstructionObject[] @relation("ObjectCreator")
+  memberships     ObjectMember[]
+  uploadedPhotos  Photo[]              @relation("PhotoUploader")
+  auditLogs       AuditLog[]
+
+  @@index([telegramId])
+  @@index([role])
+  @@map("users")
+}
+
+model ConstructionObject {
+  id          String       @id @default(cuid())
+  name        String
+  status      ObjectStatus @default(ACTIVE)
+  createdById String
+  createdBy   User         @relation("ObjectCreator", fields: [createdById], references: [id])
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  archivedAt  DateTime?
+
+  members ObjectMember[]
+  photos  Photo[]
+
+  @@index([status])
+  @@index([archivedAt])
+  @@map("construction_objects")
+}
+
+model ObjectMember {
+  id         String           @id @default(cuid())
+  objectId   String
+  object     ConstructionObject @relation(fields: [objectId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission ObjectPermission @default(VIEW)
+  createdAt  DateTime         @default(now())
+
+  @@unique([objectId, userId])
+  @@index([userId])
+  @@map("object_members")
+}
+
+model Photo {
+  id                    String    @id @default(cuid())
+  objectId              String
+  object                ConstructionObject @relation(fields: [objectId], references: [id], onDelete: Cascade)
+  uploadedById           String
+  uploadedBy            User      @relation("PhotoUploader", fields: [uploadedById], references: [id])
+
+  originalStorageKey    String
+  previewStorageKey     String
+  originalFilename      String
+  mimeType              String
+  sizeBytes             Int
+  width                 Int?
+  height                Int?
+  sha256                String
+
+  comment               String?
+
+  telegramFileId        String
+  telegramFileUniqueId  String
+  telegramMessageId      BigInt
+  telegramMediaGroupId  String?
+
+  uploadedAt            DateTime  @default(now())
+  takenAt               DateTime?
+  deletedAt             DateTime?
+
+  @@index([objectId, uploadedAt])
+  @@index([uploadedById])
+  @@index([telegramMediaGroupId])
+  @@index([sha256])
+  @@map("photos")
+}
+
+model BotSession {
+  id              String   @id @default(cuid())
+  telegramId      String   @unique
+  state           String
+  selectedObjectId String?
+  temporaryData   Json     @default("{}")
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([telegramId])
+  @@map("bot_sessions")
+}
+
+model ProcessedTelegramUpdate {
+  id          String   @id @default(cuid())
+  updateId    BigInt   @unique
+  processedAt DateTime @default(now())
+
+  @@map("processed_telegram_updates")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
