@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
@@ -39,21 +39,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (update.message) {
-      after(async () => {
-        try {
-          await handleMessage(update.message!);
-        } catch (err) {
-          console.error("[webhook] handler error", { updateId: update.update_id, error: (err as Error).message });
-        }
-      });
+      await handleMessage(update.message);
     } else if (update.callback_query) {
-      after(async () => {
-        try {
-          await handleCallbackQuery(update.callback_query!);
-        } catch (err) {
-          console.error("[webhook] handler error", { updateId: update.update_id, error: (err as Error).message });
-        }
-      });
+      await handleCallbackQuery(update.callback_query);
     }
   } catch (err) {
     let code = "UNKNOWN";
