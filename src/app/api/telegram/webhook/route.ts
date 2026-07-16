@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { handleMessage, handleCallbackQuery } from "@/lib/telegram/handlers";
@@ -38,14 +39,24 @@ export async function POST(req: NextRequest) {
     }
 
     if (update.message) {
-      await handleMessage(update.message);
+      after(async () => {
+        try {
+          await handleMessage(update.message!);
+        } catch (err) {
+          console.error("[webhook] handler error", { updateId: update.update_id, error: (err as Error).message });
+        }
+      });
     } else if (update.callback_query) {
-      await handleCallbackQuery(update.callback_query);
+      after(async () => {
+        try {
+          await handleCallbackQuery(update.callback_query!);
+        } catch (err) {
+          console.error("[webhook] handler error", { updateId: update.update_id, error: (err as Error).message });
+        }
+      });
     }
   } catch (err) {
-    // Never let a handler exception surface as a 5xx that causes Telegram to
-    // retry indefinitely and never crash the function.
-    console.error("[webhook] handler error", {
+    console.error("[webhook] error", {
       updateId: update.update_id,
       error: (err as Error).message,
     });
@@ -58,9 +69,11 @@ async function markUpdateProcessed(updateId: number): Promise<boolean> {
   try {
     await prisma.processedTelegramUpdate.create({ data: { updateId: BigInt(updateId) } });
     return true;
-  } catch {
-    // Unique constraint violation => already processed.
-    return false;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return false; // Unique constraint violation => already processed.
+    }
+    throw error;
   }
 }
 

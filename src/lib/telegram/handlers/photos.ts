@@ -98,14 +98,11 @@ export async function handleIncomingPhotoMessage(
     return;
   }
 
-  // Idempotency: skip if we've already processed this exact Telegram file for this object.
+  // Idempotency check
   const existing = await prisma.photo.findFirst({
     where: { objectId, telegramFileUniqueId: incoming.fileUniqueId, deletedAt: null },
   });
-  if (existing) {
-    await sendMessage(chatId, TXT.duplicateFile);
-    return;
-  }
+  if (existing) return; // Silent ignore for idempotency
 
   const file = await getFile(incoming.fileId);
   const originalBuffer = await downloadTelegramFile(file.file_path);
@@ -119,10 +116,7 @@ export async function handleIncomingPhotoMessage(
   const duplicateByChecksum = await prisma.photo.findFirst({
     where: { objectId, sha256: checksum, deletedAt: null },
   });
-  if (duplicateByChecksum) {
-    await sendMessage(chatId, TXT.duplicateFile);
-    return;
-  }
+  if (duplicateByChecksum) return;
 
   const preview = await generatePreview(originalBuffer);
   const dimensions = await readDimensions(originalBuffer);
@@ -163,33 +157,68 @@ export async function handleIncomingPhotoMessage(
     metadata: { objectId, sizeBytes: photo.sizeBytes },
   });
 
-  const session = await getSession(telegramId);
+  // Transaction-like update for session
+  let session = await getSession(telegramId);
   const uploadedIds = ((session.temporaryData.uploadedPhotoIds as string[]) ?? []).concat(photo.id);
-  await setSession(telegramId, { temporaryData: { ...session.temporaryData, uploadedPhotoIds: uploadedIds } });
+  
+  const isMediaGroup = !!message.media_group_id;
+  const alreadyPromptedGroup = session.temporaryData.promptedMediaGroupId === message.media_group_id;
+
+  const newTempData: any = { 
+    ...session.temporaryData, 
+    uploadedPhotoIds: uploadedIds,
+    pendingCommentPhotoId: photo.id 
+  };
+
+  if (isMediaGroup && !alreadyPromptedGroup) {
+    newTempData.promptedMediaGroupId = message.media_group_id;
+  }
+
+  await setSession(telegramId, { 
+    state: initialComment ? SessionState.AWAITING_PHOTO_UPLOAD : SessionState.AWAITING_PHOTO_COMMENT, 
+    temporaryData: newTempData 
+  });
 
   const object = await prisma.constructionObject.findUnique({ where: { id: objectId } });
 
   if (initialComment) {
-    await confirmPhotoSaved(chatId, user, object!.name, photo.uploadedAt, initialComment);
+    // Has caption from telegram directly
+    if (!isMediaGroup || !alreadyPromptedGroup) {
+      await confirmPhotoSaved(chatId, user, object!.name, photo.uploadedAt, initialComment);
+    }
   } else {
-    await setSession(telegramId, { state: SessionState.AWAITING_PHOTO_COMMENT, temporaryData: { ...session.temporaryData, uploadedPhotoIds: uploadedIds, pendingCommentPhotoId: photo.id } });
-    await sendMessage(chatId, TXT.askComment, {
-      inlineKeyboard: [
-        [{ text: BTN.skipComment, callback_data: `photo:skip:${photo.id}` }],
-        [{ text: BTN.moreImages, callback_data: `photo:more:${objectId}` }, { text: BTN.finish, callback_data: `photo:done:${objectId}` }],
-      ],
-    });
+    // No caption, prompt if not already prompted for this group
+    if (!isMediaGroup || !alreadyPromptedGroup) {
+      await sendMessage(chatId, TXT.askComment, {
+        inlineKeyboard: [
+          [{ text: BTN.skipComment, callback_data: `photo:skip:${photo.id}` }],
+          [{ text: BTN.moreImages, callback_data: `photo:more:${objectId}` }, { text: BTN.finish, callback_data: `photo:done:${objectId}` }],
+        ],
+      });
+    }
   }
 }
 
 export async function saveCommentForPhoto(chatId: number, telegramId: string, user: User, photoId: string, comment: string) {
-  const photo = await prisma.photo.update({ where: { id: photoId }, data: { comment: comment.trim() || null } });
-  const object = await prisma.constructionObject.findUnique({ where: { id: photo.objectId } });
-  await confirmPhotoSaved(chatId, user, object!.name, photo.uploadedAt, photo.comment);
-  await clearCommentStage(telegramId, photo.objectId);
+  const session = await getSession(telegramId);
+  const isGroup = !!session.temporaryData.promptedMediaGroupId;
+  
+  if (isGroup) {
+     return applyBulkComment(chatId, telegramId, user, session.selectedObjectId!, comment);
+  } else {
+    const photo = await prisma.photo.update({ where: { id: photoId }, data: { comment: comment.trim() || null } });
+    const object = await prisma.constructionObject.findUnique({ where: { id: photo.objectId } });
+    await confirmPhotoSaved(chatId, user, object!.name, photo.uploadedAt, photo.comment);
+    await clearCommentStage(telegramId, photo.objectId);
+  }
 }
 
 export async function skipCommentForPhoto(chatId: number, telegramId: string, user: User, photoId: string) {
+  const session = await getSession(telegramId);
+  if (session.temporaryData.promptedMediaGroupId) {
+    return finishUploadSession(chatId, telegramId, user, session.selectedObjectId!);
+  }
+  
   const photo = await prisma.photo.findUnique({ where: { id: photoId } });
   if (!photo) return;
   const object = await prisma.constructionObject.findUnique({ where: { id: photo.objectId } });
@@ -198,7 +227,10 @@ export async function skipCommentForPhoto(chatId: number, telegramId: string, us
 }
 
 async function clearCommentStage(telegramId: string, objectId: string) {
-  await setSession(telegramId, { state: SessionState.AWAITING_PHOTO_UPLOAD, selectedObjectId: objectId });
+  const session = await getSession(telegramId);
+  const td = { ...session.temporaryData };
+  delete td.promptedMediaGroupId;
+  await setSession(telegramId, { state: SessionState.AWAITING_PHOTO_UPLOAD, selectedObjectId: objectId, temporaryData: td });
 }
 
 async function confirmPhotoSaved(chatId: number, user: User, objectName: string, uploadedAt: Date, comment: string | null) {
@@ -240,6 +272,8 @@ interface PhotoFilter {
   keyword?: string;
 }
 
+import { sendMediaGroup } from "../client";
+
 export async function viewPhotos(chatId: number, user: User, objectId: string, index = 0, filter: PhotoFilter = {}) {
   const allowed = await assertCanAccessObject(user, objectId);
   if (!allowed) {
@@ -266,27 +300,44 @@ export async function viewPhotos(chatId: number, user: User, objectId: string, i
     return;
   }
 
-  const safeIndex = Math.min(Math.max(index, 0), total - 1);
-  const [photo] = await prisma.photo.findMany({
+  const photos = await prisma.photo.findMany({
     where,
     orderBy: { uploadedAt: "desc" },
-    skip: safeIndex,
-    take: 1,
     include: { uploadedBy: true },
   });
-  if (!photo) return;
 
-  const previewUrl = await getSignedDownloadUrl(photo.previewStorageKey);
-  const caption = TXT.photoCaption({
-    index: safeIndex + 1,
-    total,
-    date: formatDateTashkent(photo.uploadedAt),
-    time: formatTimeTashkent(photo.uploadedAt),
-    uploader: escapeHtml(photo.uploadedBy.fullName),
-    comment: photo.comment ? escapeHtml(photo.comment) : TXT.noComment,
+  const CHUNK_SIZE = 10;
+  
+  for (let i = 0; i < photos.length; i += CHUNK_SIZE) {
+    const chunk = photos.slice(i, i + CHUNK_SIZE);
+    
+    if (chunk.length === 1) {
+      const p = chunk[0]!;
+      const previewUrl = await getSignedDownloadUrl(p.previewStorageKey);
+      const caption = `📷 ${i + 1} / ${total}\n📅 ${formatDateTashkent(p.uploadedAt)}\n🕐 ${formatTimeTashkent(p.uploadedAt)}\n👤 ${escapeHtml(p.uploadedBy.fullName)}\n📝 ${p.comment ? escapeHtml(p.comment) : TXT.noComment}`;
+      await sendPhoto(chatId, previewUrl, caption);
+    } else {
+      const mediaItems = await Promise.all(chunk.map(async (p, idx) => {
+        const previewUrl = await getSignedDownloadUrl(p.previewStorageKey);
+        const caption = `📷 ${i + idx + 1} / ${total}\n📅 ${formatDateTashkent(p.uploadedAt)}\n🕐 ${formatTimeTashkent(p.uploadedAt)}\n👤 ${escapeHtml(p.uploadedBy.fullName)}\n📝 ${p.comment ? escapeHtml(p.comment) : TXT.noComment}`;
+        return {
+          type: "photo" as const,
+          media: previewUrl,
+          caption,
+          parse_mode: "HTML" as const
+        };
+      }));
+      await sendMediaGroup(chatId, mediaItems);
+    }
+  }
+
+  await sendMessage(chatId, `✅ Jami ${total} ta rasm yuborildi.`, {
+    inlineKeyboard: [
+      [{ text: "📥 Original rasmlarni olish", callback_data: `photo:downloadAll:${objectId}` }],
+      [{ text: "🔄 Qayta ko‘rish", callback_data: `obj:open:${objectId}` }],
+      [{ text: "⬅️ Obyektga qaytish", callback_data: `obj:open:${objectId}` }]
+    ]
   });
-
-  await sendPhoto(chatId, previewUrl, caption, photoNavigationKeyboard(objectId, safeIndex, total));
 }
 
 export async function sendOriginalPhoto(chatId: number, user: User, objectId: string, index: number) {

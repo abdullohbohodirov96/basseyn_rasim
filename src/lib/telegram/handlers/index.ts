@@ -44,8 +44,17 @@ export async function handleMessage(message: TelegramMessage) {
     return;
   }
 
-  const session = await getSession(telegramId);
   const text = message.text?.trim();
+
+  try {
+    if (text === "/start") {
+      await clearSession(telegramId);
+      // Optional: Clear globally expired sessions here if needed, but typically handled by cron/db.
+      await sendMessage(chatId, TXT.welcome(user.fullName), { replyKeyboard: mainMenuKeyboard(user.role) });
+      return;
+    }
+
+    const session = await getSession(telegramId);
 
   // Photo / document uploads take priority whenever we're in an upload-capable state.
   if ((message.photo || message.document) && session.selectedObjectId) {
@@ -135,13 +144,15 @@ export async function handleMessage(message: TelegramMessage) {
     }
   }
 
-  if (text === "/start") {
-    await clearSession(telegramId);
-    await sendMessage(chatId, TXT.welcome(user.fullName), { replyKeyboard: mainMenuKeyboard(user.role) });
-    return;
+    await showMainMenu(chatId, user);
+  } catch (err) {
+    console.error("[handleMessage] error", err);
+    try {
+      await sendMessage(chatId, "⚠️ Xatolik yuz berdi. Iltimos, /start buyrug‘ini qayta yuboring.");
+    } catch {
+      // Ignore if sending error message fails
+    }
   }
-
-  await showMainMenu(chatId, user);
 }
 
 export async function handleCallbackQuery(cq: TelegramCallbackQuery) {
@@ -193,6 +204,8 @@ export async function handleCallbackQuery(cq: TelegramCallbackQuery) {
       await viewPhotos(chatId, user, rest[0]!, Number(rest[1] ?? 0));
     } else if (action === "download") {
       await sendOriginalPhoto(chatId, user, rest[0]!, Number(rest[1] ?? 0));
+    } else if (action === "downloadAll") {
+      await sendMessage(chatId, "Barcha original rasmlarni birma-bir emas, umumiy shaklda yuklab olish uchun iltimos, Veb Admin Panelga kiring.");
     } else if (action === "filter") {
       await sendMessage(chatId, "Filtrlash funksiyasidan foydalanish uchun /filter buyrug'ini yuboring yoki admin panelidan foydalaning.");
     }

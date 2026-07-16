@@ -14,7 +14,7 @@ export async function getOrBootstrapUser(telegramId: string, username?: string):
   if (existing) return existing;
 
   const env = getEnv();
-  if (telegramId === env.INITIAL_ADMIN_TELEGRAM_ID) {
+  if (telegramId === env.INITIAL_ADMIN_TELEGRAM_ID.trim()) {
     return prisma.user.create({
       data: {
         telegramId,
