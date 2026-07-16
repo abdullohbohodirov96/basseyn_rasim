@@ -5,7 +5,7 @@
   "description": "Telegram bot + admin panel for managing swimming pool construction projects and progress photos",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && (prisma migrate resolve --applied 20260716_init || true) && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
