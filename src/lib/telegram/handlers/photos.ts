@@ -259,7 +259,7 @@ export async function applyBulkComment(chatId: number, telegramId: string, user:
 export async function finishUploadSession(chatId: number, telegramId: string, user: User, objectId: string) {
   await clearSession(telegramId);
   const object = await prisma.constructionObject.findUnique({ where: { id: objectId } });
-  await sendMessage(chatId, "✅ Yuklash yakunlandi.", { replyKeyboard: objectMenuKeyboard(can.renameObject(user)) });
+  await sendMessage(chatId, "✅ Yuklash yakunlandi.", { replyKeyboard: objectMenuKeyboard(user.role) });
   void object;
 }
 

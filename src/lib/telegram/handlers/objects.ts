@@ -91,7 +91,7 @@ export async function handleObjectNameInput(chatId: number, telegramId: string, 
   await clearSession(telegramId);
   await sendMessage(chatId, TXT.objectCreated, { replyKeyboard: mainMenuKeyboard(user.role) });
   await sendMessage(chatId, created.name, {
-    replyKeyboard: objectMenuKeyboard(can.renameObject(user)),
+    replyKeyboard: objectMenuKeyboard(user.role),
   });
   await setSession(telegramId, { selectedObjectId: created.id, state: "IDLE" as any });
 }
@@ -108,8 +108,7 @@ export async function openObject(chatId: number, telegramId: string, user: User,
     return;
   }
   await setSession(telegramId, { selectedObjectId: objectId, state: "IDLE" as any });
-  const canManage = can.renameObject(user);
-  await sendMessage(chatId, `🏗 ${object.name}`, { replyKeyboard: objectMenuKeyboard(canManage) });
+  await sendMessage(chatId, `🏗 ${object.name}`, { replyKeyboard: objectMenuKeyboard(user.role) });
 }
 
 export async function startRenameObject(chatId: number, telegramId: string, user: User, objectId: string) {
@@ -238,4 +237,14 @@ export async function permanentlyDeleteObject(chatId: number, telegramId: string
 
   await clearSession(telegramId);
   await sendMessage(chatId, TXT.deleted, { replyKeyboard: mainMenuKeyboard(user.role) });
+}
+
+export async function viewStaff(chatId: number, user: User, objectId: string) {
+  const object = await prisma.constructionObject.findUnique({
+    where: { id: objectId },
+    include: { members: { include: { user: true } } },
+  });
+  if (!object) return;
+  const staff = object.members.map(m => `👤 ${m.user.fullName} (${m.user.role})`).join("\n");
+  await sendMessage(chatId, staff || "Hech qanday xodim biriktirilmagan.");
 }

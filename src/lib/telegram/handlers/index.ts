@@ -19,6 +19,7 @@ import {
   askDeleteConfirmationStep1,
   askDeleteConfirmationStep2,
   permanentlyDeleteObject,
+  viewStaff,
 } from "./objects";
 import {
   startPhotoUpload,
@@ -30,7 +31,22 @@ import {
   viewPhotos,
   sendOriginalPhoto,
 } from "./photos";
-import { startAddUser, handleUserIdInput, handleUserFullNameInput } from "./users";
+import {
+  showUsersMenu,
+  listUsers,
+  startAddUser,
+  handleUserIdInput,
+  handleUserFullNameInput,
+  setUserRole,
+  setUserActive,
+  startAssignUserToObject,
+  startRemoveUserFromObject,
+  handlePickAssignUser,
+  handlePickRemoveUser,
+  assignUserToObject,
+  removeUserFromObject
+} from "./users";
+import { Role } from "@prisma/client";
 
 export async function handleMessage(message: TelegramMessage) {
   const from = message.from;
@@ -83,7 +99,24 @@ export async function handleMessage(message: TelegramMessage) {
     return;
   }
   if (text === BTN.users) {
+    await clearSession(telegramId);
+    await showUsersMenu(chatId, user);
+    return;
+  }
+  if (text === BTN.addUser) {
     await startAddUser(chatId, telegramId, user);
+    return;
+  }
+  if (text === BTN.usersList) {
+    await listUsers(chatId, user, 0);
+    return;
+  }
+  if (text === BTN.assignUserToObject) {
+    await startAssignUserToObject(chatId, telegramId, user);
+    return;
+  }
+  if (text === BTN.removeUser) {
+    await startRemoveUserFromObject(chatId, telegramId, user);
     return;
   }
   if (text === BTN.settings) {
@@ -106,8 +139,16 @@ export async function handleMessage(message: TelegramMessage) {
       await startRenameObject(chatId, telegramId, user, objectId);
       return;
     }
+    if (text === BTN.viewStaff) {
+      await viewStaff(chatId, user, objectId);
+      return;
+    }
     if (text === BTN.archiveObject) {
       await askArchiveConfirmation(chatId, telegramId, user, objectId);
+      return;
+    }
+    if (text === BTN.permanentlyDelete) {
+      await askDeleteConfirmationStep1(chatId, telegramId, user, objectId);
       return;
     }
   }
@@ -208,6 +249,25 @@ export async function handleCallbackQuery(cq: TelegramCallbackQuery) {
       await sendMessage(chatId, "Barcha original rasmlarni birma-bir emas, umumiy shaklda yuklab olish uchun iltimos, Veb Admin Panelga kiring.");
     } else if (action === "filter") {
       await sendMessage(chatId, "Filtrlash funksiyasidan foydalanish uchun /filter buyrug'ini yuboring yoki admin panelidan foydalaning.");
+    }
+    return;
+  }
+
+  if (namespace === "user") {
+    if (action === "page") {
+      await listUsers(chatId, user, Number(rest[0] ?? 0));
+    } else if (action === "role") {
+      await setUserRole(chatId, user, rest[0]!, rest[1] as Role);
+    } else if (action === "active") {
+      await setUserActive(chatId, user, rest[0]!, rest[1] === "true");
+    } else if (action === "pickassign") {
+      await handlePickAssignUser(chatId, telegramId, user, rest[0]!);
+    } else if (action === "doassign") {
+      await assignUserToObject(chatId, user, rest[0]!, rest[1]!);
+    } else if (action === "pickremove") {
+      await handlePickRemoveUser(chatId, telegramId, user, rest[0]!);
+    } else if (action === "doremove") {
+      await removeUserFromObject(chatId, user, rest[0]!, rest[1]!);
     }
     return;
   }

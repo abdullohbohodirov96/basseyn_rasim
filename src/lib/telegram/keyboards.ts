@@ -14,16 +14,38 @@ export function mainMenuKeyboard(role: Role): ReplyKeyboardButton[][] {
   return rows;
 }
 
-export function objectMenuKeyboard(canManage: boolean): ReplyKeyboardButton[][] {
+export function objectMenuKeyboard(role: Role): ReplyKeyboardButton[][] {
   const rows: ReplyKeyboardButton[][] = [
     [{ text: BTN.addPhoto }, { text: BTN.viewPhotos }],
+    [{ text: BTN.viewStaff }, { text: BTN.rename }],
+    [{ text: BTN.archiveObject }],
   ];
-  if (canManage) {
-    rows.push([{ text: BTN.rename }, { text: BTN.assignUsers }]);
-    rows.push([{ text: BTN.archiveObject }]);
+  if (role === Role.ADMIN) {
+    rows.push([{ text: BTN.permanentlyDelete }]);
   }
   rows.push([{ text: BTN.back }]);
   return rows;
+}
+
+export function usersMenuKeyboard(): ReplyKeyboardButton[][] {
+  return [
+    [{ text: BTN.addUser }, { text: BTN.usersList }],
+    [{ text: BTN.assignUserToObject }, { text: BTN.removeUser }],
+    [{ text: BTN.back }],
+  ];
+}
+
+export function rolesKeyboard(userId: string): InlineKeyboardButton[][] {
+  return [
+    [
+      { text: "ADMIN", callback_data: `user:role:${userId}:ADMIN` },
+      { text: "MANAGER", callback_data: `user:role:${userId}:MANAGER` },
+    ],
+    [
+      { text: "WORKER", callback_data: `user:role:${userId}:WORKER` },
+      { text: "VIEWER", callback_data: `user:role:${userId}:VIEWER` },
+    ],
+  ];
 }
 
 export function confirmKeyboard(confirmText: string, confirmData: string, cancelData: string): InlineKeyboardButton[][] {

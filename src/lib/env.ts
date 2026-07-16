@@ -24,9 +24,6 @@ const envSchema = z.object({
   APP_URL: z.string().optional().default(""),
   NODE_ENV: z.string().optional().default("development"),
 
-  ADMIN_PANEL_USERNAME: z.string().optional().default("admin"),
-  ADMIN_PANEL_PASSWORD: z.string().optional().default(""),
-  ADMIN_SESSION_SECRET: z.string().optional().default(""),
 });
 
 type Env = z.infer<typeof envSchema>;
