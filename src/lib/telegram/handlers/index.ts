@@ -66,7 +66,7 @@ export async function handleMessage(message: TelegramMessage) {
     if (text === "/start") {
       await clearSession(telegramId);
       // Optional: Clear globally expired sessions here if needed, but typically handled by cron/db.
-      await sendMessage(chatId, TXT.welcome(user.fullName), { replyKeyboard: mainMenuKeyboard(user.role) });
+      await sendMessage(chatId, TXT.welcome(user.fullName), { replyKeyboard: mainMenuKeyboard(user.role), parseMode: "HTML" });
       return;
     }
 

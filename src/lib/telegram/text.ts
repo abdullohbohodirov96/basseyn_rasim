@@ -3,7 +3,23 @@ export const TXT = {
     "⛔ Sizda ushbu botdan foydalanish uchun ruxsat mavjud emas. Administratorga murojaat qiling.",
   inactiveUser:
     "⛔ Sizning hisobingiz faol emas. Administratorga murojaat qiling.",
-  welcome: (name: string) => `Assalomu alaykum, ${name}! Quyidagi menyudan foydalaning.`,
+  welcome: (name: string) => `Assalomu alaykum, ${name}! Basseyn qurilishi botiga xush kelibsiz! 👋
+
+Bu bot orqali siz basseyn qurilishi jarayonlarini oson nazorat qilasiz.
+
+<b>Nimalar qila olasiz?</b>
+🏗 Yangi obyektlar (qurilish joylari) yaratish;
+📸 Obyekt jarayonlari rasmlarini yuklash (bitta yoki bir nechta);
+📝 Rasmlar uchun izohlar yozib qoldirish;
+📂 Istalgan vaqtda obyekt tarixini (hamma rasmlarini) ketma-ket ko'rish.
+
+<b>Qanday ishlatiladi?</b>
+1️⃣ Pastdagi <b>"➕ Yangi obyekt"</b> tugmasini bosib qurilish nomini kiriting.
+2️⃣ <b>"🏢 Obyektlar"</b> tugmasidan ro'yxatni ochib, obyektni tanlang.
+3️⃣ <b>"📸 Rasm qo'shish"</b> orqali ishlarning rasmini yuboring.
+4️⃣ <b>"🖼 Rasmlarni ko'rish"</b> bosilsa, shu vaqtgacha yuklangan rasmlar guruhlangan holda chiqadi.
+
+Pastdagi tugmalardan birini tanlab ishni boshlashingiz mumkin! 👇`,
   mainMenuPrompt: "Asosiy menyu:",
   askObjectName: "Yangi obyekt nomini kiriting:",
   objectNameTooShort: "❌ Obyekt nomi kamida 2 ta belgidan iborat bo'lishi kerak. Qaytadan kiriting:",
