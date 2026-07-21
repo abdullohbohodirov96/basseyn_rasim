@@ -2,14 +2,20 @@ import { prisma } from "../../prisma";
 import { can, seesAllObjects, assertCanAccessObject } from "../../auth";
 import { writeAuditLog } from "../../audit";
 import { deleteObjects } from "../../r2";
-import { setSession, clearSession, SessionState } from "../../session";
+import { getSession, setSession, clearSession, SessionState } from "../../session";
 import { sendMessage } from "../client";
 import { TXT, BTN } from "../text";
 import { mainMenuKeyboard, objectMenuKeyboard, objectListKeyboard, confirmKeyboard } from "../keyboards";
 import type { InlineKeyboardButton } from "../client";
 import type { User, ObjectStatus } from "@prisma/client";
+import { escapeHtml, buildYandexMapsUrl } from "../../utils";
 
 const PAGE_SIZE = 8;
+
+function addressLine(address: string | null): string {
+  if (!address) return "";
+  return `\n📍 <a href="${buildYandexMapsUrl(address)}">${escapeHtml(address)}</a>`;
+}
 
 export async function listObjects(chatId: number, user: User, page = 0, status: ObjectStatus = "ACTIVE") {
   const where = seesAllObjects(user)
@@ -72,8 +78,34 @@ export async function handleObjectNameInput(chatId: number, telegramId: string, 
     return;
   }
 
+  await setSession(telegramId, {
+    state: SessionState.AWAITING_OBJECT_ADDRESS,
+    temporaryData: { pendingObjectName: name },
+  });
+  await sendMessage(chatId, TXT.askObjectAddress);
+}
+
+export async function handleObjectAddressInput(chatId: number, telegramId: string, user: User, rawAddress: string) {
+  const address = rawAddress.trim().replace(/\s{2,}/g, " ");
+  if (address.length < 5) {
+    await sendMessage(chatId, TXT.objectAddressTooShort);
+    return;
+  }
+  if (address.length > 200) {
+    await sendMessage(chatId, TXT.objectAddressTooLong);
+    return;
+  }
+
+  const session = await getSession(telegramId);
+  const name = session.temporaryData.pendingObjectName as string | undefined;
+  if (!name) {
+    await clearSession(telegramId);
+    await sendMessage(chatId, TXT.genericError, { replyKeyboard: mainMenuKeyboard(user.role) });
+    return;
+  }
+
   const created = await prisma.constructionObject.create({
-    data: { name, createdById: user.id, status: "ACTIVE" },
+    data: { name, address, createdById: user.id, status: "ACTIVE" },
   });
 
   await prisma.objectMember.create({
@@ -85,13 +117,14 @@ export async function handleObjectNameInput(chatId: number, telegramId: string, 
     action: "OBJECT_CREATED",
     entityType: "ConstructionObject",
     entityId: created.id,
-    metadata: { name },
+    metadata: { name, address },
   });
 
   await clearSession(telegramId);
   await sendMessage(chatId, TXT.objectCreated, { replyKeyboard: mainMenuKeyboard(user.role) });
-  await sendMessage(chatId, created.name, {
+  await sendMessage(chatId, `${escapeHtml(created.name)}${addressLine(created.address)}`, {
     replyKeyboard: objectMenuKeyboard(user.role),
+    parseMode: "HTML",
   });
   await setSession(telegramId, { selectedObjectId: created.id, state: "IDLE" as any });
 }
@@ -108,7 +141,10 @@ export async function openObject(chatId: number, telegramId: string, user: User,
     return;
   }
   await setSession(telegramId, { selectedObjectId: objectId, state: "IDLE" as any });
-  await sendMessage(chatId, `🏗 ${object.name}`, { replyKeyboard: objectMenuKeyboard(user.role) });
+  await sendMessage(chatId, `🏗 ${escapeHtml(object.name)}${addressLine(object.address)}`, {
+    replyKeyboard: objectMenuKeyboard(user.role),
+    parseMode: "HTML",
+  });
 }
 
 export async function startRenameObject(chatId: number, telegramId: string, user: User, objectId: string) {
