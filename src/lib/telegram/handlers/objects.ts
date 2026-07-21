@@ -8,8 +8,14 @@ import { TXT, BTN } from "../text";
 import { mainMenuKeyboard, objectMenuKeyboard, objectListKeyboard, confirmKeyboard } from "../keyboards";
 import type { InlineKeyboardButton } from "../client";
 import type { User, ObjectStatus } from "@prisma/client";
+import { escapeHtml, buildYandexMapsUrl } from "../../utils";
 
 const PAGE_SIZE = 8;
+
+function addressLine(address: string | null): string {
+  if (!address) return "";
+  return `\n📍 <a href="${buildYandexMapsUrl(address)}">${escapeHtml(address)}</a>`;
+}
 
 export async function listObjects(chatId: number, user: User, page = 0, status: ObjectStatus = "ACTIVE") {
   const where = seesAllObjects(user)
@@ -116,8 +122,9 @@ export async function handleObjectAddressInput(chatId: number, telegramId: strin
 
   await clearSession(telegramId);
   await sendMessage(chatId, TXT.objectCreated, { replyKeyboard: mainMenuKeyboard(user.role) });
-  await sendMessage(chatId, `${created.name}\n📍 ${created.address}`, {
+  await sendMessage(chatId, `${escapeHtml(created.name)}${addressLine(created.address)}`, {
     replyKeyboard: objectMenuKeyboard(user.role),
+    parseMode: "HTML",
   });
   await setSession(telegramId, { selectedObjectId: created.id, state: "IDLE" as any });
 }
@@ -134,8 +141,10 @@ export async function openObject(chatId: number, telegramId: string, user: User,
     return;
   }
   await setSession(telegramId, { selectedObjectId: objectId, state: "IDLE" as any });
-  const addressLine = object.address ? `\n📍 ${object.address}` : "";
-  await sendMessage(chatId, `🏗 ${object.name}${addressLine}`, { replyKeyboard: objectMenuKeyboard(user.role) });
+  await sendMessage(chatId, `🏗 ${escapeHtml(object.name)}${addressLine(object.address)}`, {
+    replyKeyboard: objectMenuKeyboard(user.role),
+    parseMode: "HTML",
+  });
 }
 
 export async function startRenameObject(chatId: number, telegramId: string, user: User, objectId: string) {

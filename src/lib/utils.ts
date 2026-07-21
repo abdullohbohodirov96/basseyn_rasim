@@ -44,6 +44,11 @@ export function escapeHtml(input: string): string {
     .replace(/'/g, "&#039;");
 }
 
+/** Builds a Yandex Maps search URL for a free-text address. */
+export function buildYandexMapsUrl(address: string): string {
+  return `https://yandex.com/maps/?text=${encodeURIComponent(address)}`;
+}
+
 const TASHKENT_TZ = "Asia/Tashkent";
 
 export function formatDateTashkent(date: Date): string {
