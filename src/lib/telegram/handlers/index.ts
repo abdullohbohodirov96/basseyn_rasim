@@ -10,6 +10,7 @@ import {
   listObjects,
   startCreateObject,
   handleObjectNameInput,
+  handleObjectAddressInput,
   openObject,
   startRenameObject,
   handleObjectRenameInput,
@@ -134,6 +135,9 @@ export async function handleMessage(message: TelegramMessage) {
     switch (session.state) {
       case SessionState.AWAITING_OBJECT_NAME:
         await handleObjectNameInput(chatId, telegramId, user, text);
+        return;
+      case SessionState.AWAITING_OBJECT_ADDRESS:
+        await handleObjectAddressInput(chatId, telegramId, user, text);
         return;
       case SessionState.AWAITING_OBJECT_RENAME:
         if (session.selectedObjectId) {
